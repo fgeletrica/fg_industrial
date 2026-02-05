@@ -1,5 +1,11 @@
 import 'core/sb.dart';
 
+import "screen_history.dart";
+
+import "screen_history.dart";
+
+import "screen_history.dart";
+
 import "package:flutter/material.dart";
 import "package:intl/intl.dart";
 import "package:pdf/pdf.dart";
@@ -243,16 +249,39 @@ class _NewDiagnosticScreenState extends State<NewDiagnosticScreen> {
   }
 
   Future<void> _loadAll() async {
-    // pega site do usuário (se tiver)
-    final u = Sb.c.auth.currentUser;
-    Map<String, dynamic>? prof;
-    if (u != null) {
-      prof = await Sb.c
-          .from("profiles")
-          .select("site_id")
-          .eq("user_id", u.id)
-          .maybeSingle();
+    setState(() => loading = true);
+
+    try {
+      // pega site do usuário (se tiver)
+      final u = Sb.c.auth.currentUser;
+      Map<String, dynamic>? prof;
+      if (u != null) {
+        prof = await Sb.c
+            .from("profiles")
+            .select("site_id")
+            .eq("user_id", u.id)
+            .maybeSingle();
+      }
+
+      final s = await Sb.c.from("sites").select("id, code, name").order("code");
+      sites = (s as List).cast<Map<String, dynamic>>();
+
+      // site padrão: o do perfil, senão o primeiro
+      final preferred = prof?["site_id"];
+      siteId = preferred?.toString() ?? (sites.isNotEmpty ? sites.first["id"].toString() : null);
+
+      await _loadLines();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao carregar cadastro: $e")),
+        );
+      }
+    } finally {
+      loading = false;
+      if (mounted) setState(() {});
     }
+  }
 
     final s = await Sb.c.from("sites").select("id, code, name").order("code");
     sites = (s as List).cast<Map<String, dynamic>>();
@@ -702,7 +731,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 /// Ajuste as faixas se quiser.
 String autoShift(DateTime now) {
   final h = now.hour;
-  if (h >= 6 && h < 14) return "Manhã";
+  if (h >= 6 && h < 14) return "Manha";
   if (h >= 14 && h < 22) return "Tarde";
   return "Noite";
 }

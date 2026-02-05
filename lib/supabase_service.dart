@@ -1,5 +1,13 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../app_config.dart';
 
-class SupabaseService {
-  static SupabaseClient get client => Supabase.instance.client;
+class Sb {
+  static SupabaseClient get c => Supabase.instance.client;
+
+  static Future<void> init() async {
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      anonKey: AppConfig.supabaseAnonKey,
+    );
+  }
 }

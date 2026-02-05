@@ -1,0 +1,547 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
+import 'core/sb.dart';
+
+class HistoryPdfCsvScreen extends StatefulWidget {
+  const HistoryPdfCsvScreen({super.key});
+
+  @override
+  State<HistoryPdfCsvScreen> createState() => _HistoryPdfCsvScreenState();
+}
+
+class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
+  bool loading = true;
+  bool searching = false;
+
+  DateTime from = DateTime.now();
+  DateTime to = DateTime.now();
+
+  String shift = "ALL";
+
+  List<Map<String, dynamic>> lines = [];
+  List<Map<String, dynamic>> groups = [];
+  List<Map<String, dynamic>> machines = [];
+
+  String? lineId;
+  String? groupId;
+  String? machineId;
+
+  List<Map<String, dynamic>> results = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    setState(() => loading = true);
+
+    try {
+      final u = Sb.c.auth.currentUser;
+      if (u == null) throw Exception("Usuário não logado.");
+
+      final prof = await Sb.c
+          .from("profiles")
+          .select("site_id")
+          .eq("user_id", u.id)
+          .maybeSingle();
+
+      final siteId = prof?["site_id"]?.toString();
+      if (siteId == null || siteId.isEmpty) {
+        throw Exception("Seu usuário está sem site_id no profiles.");
+      }
+
+      final l = await Sb.c
+          .from("lines")
+          .select("id, name")
+          .eq("site_id", siteId)
+          .order("name");
+
+      lines = (l as List).cast<Map<String, dynamic>>();
+      lineId = lines.isNotEmpty ? lines.first["id"].toString() : null;
+
+      await _loadGroups();
+    } catch (e, st) {
+      // ignore: avoid_print
+      print("ERRO History bootstrap: $e");
+      // ignore: avoid_print
+      print(st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _loadGroups() async {
+    groups = [];
+    groupId = null;
+    machines = [];
+    machineId = null;
+
+    if (lineId == null) return;
+
+    final g = await Sb.c
+        .from("machine_groups")
+        .select("id, name")
+        .eq("line_id", lineId!)
+        .order("name");
+
+    groups = (g as List).cast<Map<String, dynamic>>();
+    groupId = groups.isNotEmpty ? groups.first["id"].toString() : null;
+
+    await _loadMachines();
+  }
+
+  Future<void> _loadMachines() async {
+    machines = [];
+    machineId = null; // default ALL
+
+    if (groupId == null) return;
+
+    final m = await Sb.c
+        .from("machines")
+        .select("id, name")
+        .eq("group_id", groupId!)
+        .order("name");
+
+    machines = (m as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> _pickFrom() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: from,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime(2100, 1, 1),
+    );
+    if (d == null) return;
+    setState(() => from = d);
+  }
+
+  Future<void> _pickTo() async {
+    final d = await showDatePicker(
+      context: context,
+      initialDate: to,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime(2100, 1, 1),
+    );
+    if (d == null) return;
+    setState(() => to = d);
+  }
+
+  String _fmt(DateTime d) => DateFormat("dd/MM/yyyy").format(d);
+
+  DateTime _startOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 0, 0, 0);
+  DateTime _endOfDay(DateTime d) => DateTime(d.year, d.month, d.day, 23, 59, 59);
+
+  Future<void> _search() async {
+    setState(() => searching = true);
+
+    try {
+      final u = Sb.c.auth.currentUser;
+      if (u == null) throw Exception("Usuário não logado.");
+
+      final prof = await Sb.c
+          .from("profiles")
+          .select("site_id")
+          .eq("user_id", u.id)
+          .maybeSingle();
+
+      final siteId = prof?["site_id"]?.toString();
+      if (siteId == null || siteId.isEmpty) {
+        throw Exception("Seu usuário está sem site_id no profiles.");
+      }
+
+      // ✅ dynamic: evita o Dart “travar” o tipo e sumir com eq()
+      dynamic q = Sb.c
+          .from("diagnostics")
+          .select(
+              "id, created_at, shift, problem, action_taken, root_cause, status, line_id, group_id, machine_id")
+          .eq("site_id", siteId)
+          .gte("created_at", _startOfDay(from).toIso8601String())
+          .lte("created_at", _endOfDay(to).toIso8601String());
+
+      if (shift != "ALL") q = q.eq("shift", shift);
+      if (lineId != null) q = q.eq("line_id", lineId!);
+      if (groupId != null) q = q.eq("group_id", groupId!);
+      if (machineId != null) q = q.eq("machine_id", machineId!);
+
+      final data = await q.order("created_at", ascending: false);
+      results = (data as List).cast<Map<String, dynamic>>();
+
+      if (mounted) setState(() {});
+    } catch (e, st) {
+      // ignore: avoid_print
+      print("ERRO Search: $e");
+      // ignore: avoid_print
+      print(st);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao buscar: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => searching = false);
+    }
+  }
+
+  Future<void> _genPdf() async {
+    if (results.isEmpty) return;
+
+    final doc = pw.Document();
+
+    doc.addPage(
+      pw.MultiPage(
+        build: (ctx) => [
+          pw.Text("Histórico - Diagnósticos",
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 8),
+          pw.Text("Período: ${_fmt(from)} até ${_fmt(to)}"),
+          pw.Text("Turno: $shift"),
+          pw.SizedBox(height: 12),
+          pw.Table.fromTextArray(
+            headers: const ["Data", "Turno", "Status", "Problema", "Ação", "Causa raiz"],
+            data: results.map((r) {
+              final dt = DateTime.tryParse(r["created_at"].toString())?.toLocal();
+              final dts = dt == null ? "-" : DateFormat("dd/MM HH:mm").format(dt);
+              final sh = r["shift"]?.toString() ?? "-";
+              final st = r["status"]?.toString() ?? "-";
+              final prob = (r["problem"] ?? "").toString();
+              final act = (r["action_taken"] ?? "").toString();
+              final rc = (r["root_cause"] == true) ? "SIM" : "NÃO";
+              return [dts, sh, st, prob, act, rc];
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (_) async => doc.save());
+  }
+
+  Future<void> _genCsv() async {
+    if (results.isEmpty) return;
+
+    final rows = <List<String>>[];
+    rows.add(["created_at", "shift", "status", "problem", "action_taken", "root_cause"]);
+
+    for (final r in results) {
+      rows.add([
+        r["created_at"]?.toString() ?? "",
+        r["shift"]?.toString() ?? "",
+        r["status"]?.toString() ?? "",
+        (r["problem"] ?? "").toString().replaceAll("\n", " "),
+        (r["action_taken"] ?? "").toString().replaceAll("\n", " "),
+        (r["root_cause"] == true) ? "true" : "false",
+      ]);
+    }
+
+    final csv = const ListToCsvConverter().convert(rows);
+
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("CSV gerado"),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: SelectableText(csv),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fechar"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canExport = results.isNotEmpty && !searching && !loading;
+
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Histórico • PDF/CSV"),
+        actions: [
+          IconButton(onPressed: _bootstrap, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _card(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _dateRow("De", _fmt(from), _pickFrom)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _dateRow("Até", _fmt(to), _pickTo)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                _label("Turno"),
+                _drop(
+                  value: shift,
+                  items: const {
+                    "ALL": "ALL",
+                    "Manha": "Manhã",
+                    "Tarde": "Tarde",
+                    "Noite": "Noite",
+                    "Indefinido": "Indefinido",
+                  },
+                  onChanged: (v) => setState(() => shift = v),
+                ),
+                const SizedBox(height: 12),
+
+                _label("Linha"),
+                _dropList(
+                  value: lineId,
+                  list: lines,
+                  label: (e) => e["name"].toString(),
+                  onChanged: (v) async {
+                    setState(() {
+                      lineId = v;
+                      groups = [];
+                      machines = [];
+                      groupId = null;
+                      machineId = null;
+                    });
+                    await _loadGroups();
+                    if (mounted) setState(() {});
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                _label("Máquinas (grupo)"),
+                _dropList(
+                  value: groupId,
+                  list: groups,
+                  label: (e) => e["name"].toString(),
+                  onChanged: (v) async {
+                    setState(() {
+                      groupId = v;
+                      machines = [];
+                      machineId = null;
+                    });
+                    await _loadMachines();
+                    if (mounted) setState(() {});
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                _label("Máquina (item)"),
+                _dropMachineAll(
+                  value: machineId,
+                  machines: machines,
+                  onChanged: (v) => setState(() => machineId = v),
+                ),
+
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: searching ? null : _search,
+                    icon: const Icon(Icons.search),
+                    label: searching
+                        ? const SizedBox(
+                            height: 18, width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text("Buscar"),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+                Row(
+                  children: const [
+                    Icon(Icons.check_box, size: 18, color: Colors.white54),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "O histórico só aparece depois do Buscar.",
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Resultados: ${results.length}",
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: canExport ? _genPdf : null,
+                        child: const Text("Gerar PDF"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: canExport ? _genCsv : null,
+                        child: const Text("Gerar CSV"),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text("Selecione os filtros e clique em Buscar.",
+                    style: TextStyle(color: Colors.white60)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _label(String s) =>
+      Align(alignment: Alignment.centerLeft, child: Text(s, style: const TextStyle(fontWeight: FontWeight.w800)));
+
+  Widget _drop({
+    required String value,
+    required Map<String, String> items,
+    required ValueChanged<String> onChanged,
+  }) {
+    return DropdownButton<String>(
+      value: value,
+      isExpanded: true,
+      items: items.entries
+          .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+          .toList(),
+      onChanged: (v) {
+        if (v == null) return;
+        onChanged(v);
+      },
+    );
+  }
+
+  Widget _dropList({
+    required String? value,
+    required List<Map<String, dynamic>> list,
+    required String Function(Map<String, dynamic>) label,
+    required ValueChanged<String?> onChanged,
+  }) {
+    if (list.isEmpty) {
+      return const Text("Sem dados.", style: TextStyle(color: Colors.white54));
+    }
+
+    return DropdownButton<String>(
+      value: value ?? list.first["id"].toString(),
+      isExpanded: true,
+      items: list
+          .map((e) => DropdownMenuItem(value: e["id"].toString(), child: Text(label(e))))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _dropMachineAll({
+    required String? value,
+    required List<Map<String, dynamic>> machines,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final items = <DropdownMenuItem<String?>>[
+      const DropdownMenuItem<String?>(value: null, child: Text("ALL")),
+      ...machines.map((m) => DropdownMenuItem<String?>(
+            value: m["id"].toString(),
+            child: Text(m["name"].toString()),
+          )),
+    ];
+
+    return DropdownButton<String?>(
+      value: value,
+      isExpanded: true,
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _dateRow(String label, String value, VoidCallback onPick) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: onPick,
+            child: const Text("Selecionar"),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class ListToCsvConverter {
+  const ListToCsvConverter();
+
+  String convert(List<List<String>> rows) {
+    String esc(String s) {
+      final needsQuote = s.contains(",") || s.contains('"') || s.contains("\n");
+      if (!needsQuote) return s;
+      return '"${s.replaceAll('"', '""')}"';
+    }
+
+    return rows.map((r) => r.map(esc).join(",")).join("\n");
+  }
+}

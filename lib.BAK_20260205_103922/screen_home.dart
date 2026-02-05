@@ -1,0 +1,616 @@
+import 'core/sb.dart';
+
+import 'package:flutter/material.dart';
+
+import 'screen_history.dart';
+
+import "screen_users.dart";
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String? role;
+  String? siteCode;
+  String? siteName;
+
+  int todayCount = 0;
+  int weekCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHeader();
+    _loadCounts();
+  }
+
+  Future<void> _loadHeader() async {
+    try {
+      final u = Sb.c.auth.currentUser;
+      if (u == null) return;
+
+      final prof = await Sb.c
+          .from("v_users_management")
+          .select("site_id, role")
+          .eq("user_id", u.id)
+          .maybeSingle();
+
+      role = prof?["role"]?.toString();
+
+      final siteId = prof?["site_id"];
+      if (siteId != null) {
+        final site = await Sb.c
+            .from("sites")
+            .select("code, name")
+            .eq("id", siteId)
+            .maybeSingle();
+        siteCode = site?["code"]?.toString();
+        siteName = site?["name"]?.toString();
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      // se der erro, não trava app
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao carregar perfil: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final now = DateTime.now();
+      final startToday = DateTime(now.year, now.month, now.day).toIso8601String();
+      final startWeek = now.subtract(const Duration(days: 7)).toIso8601String();
+
+      final qToday = await Sb.c
+          .from("diagnostics")
+          .select("id")
+          .gte("created_at", startToday);
+
+      final qWeek = await Sb.c
+          .from("diagnostics")
+          .select("id")
+          .gte("created_at", startWeek);
+
+      todayCount = (qToday as List).length;
+      weekCount = (qWeek as List).length;
+
+      if (mounted) setState(() {});
+    } catch (_) {
+      // ignorar aqui
+    }
+  }
+
+  Future<void> _signOut() async {
+    await Sb.c.auth.signOut();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final u = Sb.c.auth.currentUser;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Industrial • ${siteCode ?? "SITE"}"),
+        actions: [
+          IconButton(onPressed: _loadCounts, icon: const Icon(Icons.refresh)),
+          if (role == "owner")
+            IconButton(
+              tooltip: "Usuários (Gestão)",
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const UsersManagementScreen()),
+              ),
+            ),
+          IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Bem-vindo, ${u?.email ?? ""}",
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text("Role: ${role ?? "-"} • Site: ${siteCode ?? "-"}",
+                      style: const TextStyle(color: Colors.white70)),
+                  if (siteName != null) Text(siteName!, style: const TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _stat("Hoje", "$todayCount")),
+              const SizedBox(width: 12),
+              Expanded(child: _stat("Últimos 7 dias", "$weekCount")),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const Text("Ações", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+
+          _action(
+            icon: Icons.playlist_add_check,
+            title: "Novo Diagnóstico",
+            subtitle: "Registrar problema + ação tomada + causa raiz.",
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NewDiagnosticScreen()),
+              );
+              _loadCounts();
+            },
+          ),
+
+          const SizedBox(height: 10),
+
+          _action(
+            icon: Icons.picture_as_pdf,
+            title: "Histórico • PDF/CSV",
+            subtitle: "Filtrar por período/turno/linha/máquinas e exportar.",
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HistoryPdfCsvScreen()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String title, String value) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _action({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final gold = Theme.of(context).colorScheme.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: gold.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 30),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: const TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+  Widget _actionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.amber.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 32),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(subtitle),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+class NewDiagnosticScreen extends StatefulWidget {
+  const NewDiagnosticScreen({super.key});
+  @override
+  State<NewDiagnosticScreen> createState() => _NewDiagnosticScreenState();
+}
+
+class _NewDiagnosticScreenState extends State<NewDiagnosticScreen> {
+  bool loading = true;
+  bool saving = false;
+
+  List<Map<String, dynamic>> sites = [];
+  List<Map<String, dynamic>> lines = [];
+  List<Map<String, dynamic>> groups = [];
+  List<Map<String, dynamic>> machines = [];
+
+  String? siteId;
+  String? lineId;
+  String? groupId;
+  String? machineId;
+
+  final problem = TextEditingController();
+  final actionTaken = TextEditingController();
+  bool rootCause = false;
+
+  String shift = autoShift(DateTime.now());
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => loading = true);
+
+    try {
+      final u = Sb.c.auth.currentUser;
+      if (u == null) throw Exception("Usuário não logado.");
+
+      final prof = await Sb.c
+          .from("v_users_management")
+          .select("site_id, role")
+          .eq("user_id", u.id)
+          .maybeSingle();
+final s = await Sb.c.from("sites").select("id, code, name").order("code");
+      sites = (s as List).cast<Map<String, dynamic>>();
+
+      final preferred = prof?["site_id"]?.toString();
+      siteId = preferred ?? (sites.isNotEmpty ? sites.first["id"].toString() : null);
+
+      await _loadLines();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao carregar: $e")),
+        );
+      }
+    } finally {
+      loading = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _loadLines() async {
+    if (siteId == null) return;
+    final l = await Sb.c
+        .from("lines")
+        .select("id, name")
+        .eq("site_id", siteId!)
+        .order("name");
+    lines = (l as List).cast<Map<String, dynamic>>();
+    lineId = lines.isNotEmpty ? lines.first["id"].toString() : null;
+    await _loadGroups();
+  }
+
+  Future<void> _loadGroups() async {
+    if (lineId == null) return;
+    final g = await Sb.c
+        .from("machine_groups")
+        .select("id, name")
+        .eq("line_id", lineId!)
+        .order("name");
+    groups = (g as List).cast<Map<String, dynamic>>();
+    groupId = groups.isNotEmpty ? groups.first["id"].toString() : null;
+    await _loadMachines();
+  }
+
+  Future<void> _loadMachines() async {
+    if (groupId == null) return;
+    final m = await Sb.c
+        .from("machines")
+        .select("id, name")
+        .eq("group_id", groupId!)
+        .order("name");
+    machines = (m as List).cast<Map<String, dynamic>>();
+    machineId = machines.isNotEmpty ? machines.first["id"].toString() : null;
+  }
+
+  @override
+  void dispose() {
+    problem.dispose();
+    actionTaken.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    final u = Sb.c.auth.currentUser;
+    if (u == null) return;
+
+    if (siteId == null || lineId == null || groupId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Selecione Site/Linha/Grupo.")),
+      );
+      return;
+    }
+    if (problem.text.trim().isEmpty || actionTaken.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Preencha Problema e Ação tomada.")),
+      );
+      return;
+    }
+
+    setState(() => saving = true);
+
+    try {
+      await Sb.c.from("diagnostics").insert({
+        "site_id": siteId,
+        "line_id": lineId,
+        "group_id": groupId,
+        "machine_id": machineId,
+        "shift": shift,
+        "problem": problem.text.trim(),
+        "action_taken": actionTaken.text.trim(),
+        "root_cause": rootCause,
+        "status": "closed",
+        "closed_at": DateTime.now().toIso8601String(),
+        "created_by": u.id,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Diagnóstico salvo.")),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao salvar: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Novo Diagnóstico")),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: _siteBlock())),
+          const SizedBox(height: 10),
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: _lineShiftBlock())),
+          const SizedBox(height: 10),
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: _machineBlock())),
+          const SizedBox(height: 10),
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: _textBlock("Problema", problem, "Descreva o problema"))),
+          const SizedBox(height: 10),
+          Card(child: Padding(padding: const EdgeInsets.all(14), child: _textBlock("Ação tomada", actionTaken, "O que foi feito para resolver"))),
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  const Text("Causa raiz", style: TextStyle(fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Switch(value: rootCause, onChanged: (v) => setState(() => rootCause = v)),
+                  Text(rootCause ? "SIM" : "NÃO"),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton(
+            onPressed: saving ? null : _save,
+            child: saving
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text("Fechar diagnóstico"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _siteBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Site", style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: siteId,
+          isExpanded: true,
+          items: sites
+              .map((e) => DropdownMenuItem(
+                    value: e["id"].toString(),
+                    child: Text("${e["code"]} • ${e["name"]}"),
+                  ))
+              .toList(),
+          onChanged: (v) async {
+            setState(() {
+              siteId = v;
+              lines = [];
+              groups = [];
+              machines = [];
+              lineId = null;
+              groupId = null;
+              machineId = null;
+            });
+            await _loadLines();
+            if (mounted) setState(() {});
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _lineShiftBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Linha", style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: lineId,
+          isExpanded: true,
+          items: lines
+              .map((e) => DropdownMenuItem(
+                    value: e["id"].toString(),
+                    child: Text(e["name"].toString()),
+                  ))
+              .toList(),
+          onChanged: (v) async {
+            setState(() {
+              lineId = v;
+              groups = [];
+              machines = [];
+              groupId = null;
+              machineId = null;
+            });
+            await _loadGroups();
+            if (mounted) setState(() {});
+          },
+        ),
+        const SizedBox(height: 12),
+        const Text("Turno", style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: shift,
+          isExpanded: true,
+          items: const [
+            DropdownMenuItem(value: "Manha", child: Text("Manhã")),
+            DropdownMenuItem(value: "Tarde", child: Text("Tarde")),
+            DropdownMenuItem(value: "Noite", child: Text("Noite")),
+            DropdownMenuItem(value: "Indefinido", child: Text("Indefinido")),
+          ],
+          onChanged: (v) => setState(() => shift = v ?? shift),
+        ),
+      ],
+    );
+  }
+
+  Widget _machineBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Máquinas (grupo)", style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: groupId,
+          isExpanded: true,
+          items: groups
+              .map((e) => DropdownMenuItem(
+                    value: e["id"].toString(),
+                    child: Text(e["name"].toString()),
+                  ))
+              .toList(),
+          onChanged: (v) async {
+            setState(() {
+              groupId = v;
+              machines = [];
+              machineId = null;
+            });
+            await _loadMachines();
+            if (mounted) setState(() {});
+          },
+        ),
+        const SizedBox(height: 12),
+        const Text("Máquina (item)", style: TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: machineId,
+          isExpanded: true,
+          items: [
+            const DropdownMenuItem(value: null, child: Text("ALL")),
+            ...machines.map((e) => DropdownMenuItem(
+                  value: e["id"].toString(),
+                  child: Text(e["name"].toString()),
+                )),
+          ],
+          onChanged: (v) => setState(() => machineId = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _textBlock(String title, TextEditingController c, String hint) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: c,
+          minLines: 3,
+          maxLines: 6,
+          decoration: InputDecoration(hintText: hint),
+        ),
+      ],
+    );
+  }
+}
+
+/// Retorna o turno automaticamente pelo horário atual.
+String autoShift(DateTime now) {
+  final h = now.hour;
+  if (h >= 6 && h < 14) return "Manha";
+  if (h >= 14 && h < 22) return "Tarde";
+  return "Noite";
+}

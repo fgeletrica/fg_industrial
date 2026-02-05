@@ -1,0 +1,331 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:csv/csv.dart';
+
+import '../supabase_service.dart';
+
+class HistoryPdfCsvScreen extends StatefulWidget {
+  const HistoryPdfCsvScreen({super.key});
+
+  @override
+  State<HistoryPdfCsvScreen> createState() => _HistoryPdfCsvScreenState();
+}
+
+class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
+  DateTime from = DateTime.now();
+  DateTime to = DateTime.now();
+
+  bool loading = false;
+  List<Map<String, dynamic>> rows = [];
+
+  String shift = "ALL";
+
+  List<Map<String, dynamic>> lines = [];
+  List<Map<String, dynamic>> groups = [];
+  List<Map<String, dynamic>> machines = [];
+  String? lineId;
+  String? groupId;
+  String? machineId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRefs();
+  }
+
+  Future<void> _loadRefs() async {
+    try {
+      final me = await Sb.c.from("profiles").select("site_id").eq("user_id", Sb.c.auth.currentUser!.id).maybeSingle();
+      final siteId = me?["site_id"]?.toString();
+      if (siteId == null) return;
+
+      final l = await Sb.c.from("lines").select("id, name").eq("site_id", siteId).order("name");
+      lines = (l as List).cast<Map<String, dynamic>>();
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _loadGroups() async {
+    if (lineId == null) return;
+    final g = await Sb.c.from("machine_groups").select("id, name").eq("line_id", lineId!).order("name");
+    groups = (g as List).cast<Map<String, dynamic>>();
+    groupId = groups.isNotEmpty ? groups.first["id"].toString() : null;
+    await _loadMachines();
+  }
+
+  Future<void> _loadMachines() async {
+    if (groupId == null) return;
+    final m = await Sb.c.from("machines").select("id, name").eq("group_id", groupId!).order("name");
+    machines = (m as List).cast<Map<String, dynamic>>();
+    machineId = machines.isNotEmpty ? machines.first["id"].toString() : null;
+  }
+
+  String _shiftToDb(String v) => (v == "Manhã") ? "Manha" : v;
+
+  Future<void> _search() async {
+    setState(() => loading = true);
+    try {
+      final fromIso = DateTime(from.year, from.month, from.day).toIso8601String();
+      final toIso = DateTime(to.year, to.month, to.day, 23, 59, 59).toIso8601String();
+
+      // IMPORTANTE:
+      // aplica filtros antes do order() pra manter PostgrestFilterBuilder
+      var q = Sb.c
+          .from("v_diagnostics_pdf")
+          .select("id, site_code, line_name, group_name, machine_name, shift, problem, action_taken, root_cause, created_at")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso);
+
+      if (shift != "ALL") {
+        q = q.eq("shift", _shiftToDb(shift));
+      }
+
+      if (lineId != null) {
+        final ln = lines.firstWhere((e) => e["id"].toString() == lineId, orElse: () => {});
+        if (ln.isNotEmpty) q = q.eq("line_name", ln["name"].toString());
+      }
+
+      if (groupId != null) {
+        final gn = groups.firstWhere((e) => e["id"].toString() == groupId, orElse: () => {});
+        if (gn.isNotEmpty) q = q.eq("group_name", gn["name"].toString());
+      }
+
+      if (machineId != null) {
+        final mn = machines.firstWhere((e) => e["id"].toString() == machineId, orElse: () => {});
+        if (mn.isNotEmpty) q = q.eq("machine_name", mn["name"].toString());
+      }
+
+      final data = await q.order("created_at", ascending: false);
+      rows = (data as List).cast<Map<String, dynamic>>();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao buscar: $e")));
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<Uint8List> _buildPdf() async {
+    final doc = pw.Document();
+    final df = DateFormat("dd/MM/yyyy HH:mm");
+
+    doc.addPage(
+      pw.MultiPage(
+        build: (ctx) => [
+          pw.Text("FG Industrial — Histórico", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.Text("Período: ${DateFormat('dd/MM/yyyy').format(from)} até ${DateFormat('dd/MM/yyyy').format(to)}"),
+          pw.SizedBox(height: 12),
+          pw.Table.fromTextArray(
+            headers: const ["Data", "Linha", "Grupo", "Máquina", "Turno", "Problema", "Ação", "Causa raiz"],
+            data: rows.map((r) {
+              final created = DateTime.tryParse(r["created_at"].toString());
+              return [
+                created == null ? "" : df.format(created),
+                (r["line_name"] ?? "").toString(),
+                (r["group_name"] ?? "").toString(),
+                (r["machine_name"] ?? "").toString(),
+                (r["shift"] ?? "").toString(),
+                (r["problem"] ?? "").toString(),
+                (r["action_taken"] ?? "").toString(),
+                (r["root_cause"] == true) ? "SIM" : "NÃO",
+              ];
+            }).toList(),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  String _buildCsv() {
+    final df = DateFormat("yyyy-MM-dd HH:mm");
+    final data = <List<String>>[
+      ["id", "created_at", "site", "line", "group", "machine", "shift", "problem", "action_taken", "root_cause"],
+      ...rows.map((r) {
+        final created = DateTime.tryParse(r["created_at"].toString());
+        return [
+          (r["id"] ?? "").toString(),
+          created == null ? "" : df.format(created),
+          (r["site_code"] ?? "").toString(),
+          (r["line_name"] ?? "").toString(),
+          (r["group_name"] ?? "").toString(),
+          (r["machine_name"] ?? "").toString(),
+          (r["shift"] ?? "").toString(),
+          (r["problem"] ?? "").toString(),
+          (r["action_taken"] ?? "").toString(),
+          (r["root_cause"] == true) ? "true" : "false",
+        ];
+      }),
+    ];
+    return const ListToCsvConverter().convert(data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Histórico • PDF/CSV")),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Expanded(child: _dateField("De", from, (d) => setState(() => from = d))),
+              const SizedBox(width: 10),
+              Expanded(child: _dateField("Até", to, (d) => setState(() => to = d))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: shift,
+            decoration: const InputDecoration(labelText: "Turno"),
+            items: const [
+              DropdownMenuItem(value: "ALL", child: Text("ALL")),
+              DropdownMenuItem(value: "Manhã", child: Text("Manhã")),
+              DropdownMenuItem(value: "Tarde", child: Text("Tarde")),
+              DropdownMenuItem(value: "Noite", child: Text("Noite")),
+              DropdownMenuItem(value: "Indefinido", child: Text("Indefinido")),
+            ],
+            onChanged: (v) => setState(() => shift = v ?? "ALL"),
+          ),
+          const SizedBox(height: 10),
+          _dropMaps(
+            label: "Linha",
+            value: lineId,
+            items: lines,
+            getLabel: (x) => x["name"].toString(),
+            onChanged: (v) async {
+              setState(() {
+                lineId = v;
+                groups = [];
+                machines = [];
+                groupId = null;
+                machineId = null;
+              });
+              await _loadGroups();
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 10),
+          _dropMaps(
+            label: "Máquinas (grupo)",
+            value: groupId,
+            items: groups,
+            getLabel: (x) => x["name"].toString(),
+            onChanged: (v) async {
+              setState(() {
+                groupId = v;
+                machines = [];
+                machineId = null;
+              });
+              await _loadMachines();
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(height: 10),
+          _dropMaps(
+            label: "Máquina (item)",
+            value: machineId,
+            items: machines,
+            getLabel: (x) => x["name"].toString(),
+            onChanged: (v) => setState(() => machineId = v),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: loading ? null : _search,
+              icon: const Icon(Icons.search),
+              label: Text(loading ? "Buscando..." : "Buscar"),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text("Resultados: ${rows.length}", style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: rows.isEmpty
+                      ? null
+                      : () async {
+                          final bytes = await _buildPdf();
+                          await Printing.layoutPdf(onLayout: (_) async => bytes);
+                        },
+                  icon: const Icon(Icons.picture_as_pdf),
+                  label: const Text("Gerar PDF"),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: rows.isEmpty
+                      ? null
+                      : () async {
+                          final csv = _buildCsv();
+                          if (!mounted) return;
+                          showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: const Text("CSV (copiar)"),
+                              content: SizedBox(
+                                width: 600,
+                                child: SingleChildScrollView(child: SelectableText(csv)),
+                              ),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fechar")),
+                              ],
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.table_view),
+                  label: const Text("Gerar CSV"),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dateField(String label, DateTime value, ValueChanged<DateTime> onPick) {
+    return InkWell(
+      onTap: () async {
+        final d = await showDatePicker(
+          context: context,
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2100),
+          initialDate: value,
+        );
+        if (d != null) onPick(d);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: label),
+        child: Text(DateFormat("dd/MM/yyyy").format(value)),
+      ),
+    );
+  }
+
+  Widget _dropMaps({
+    required String label,
+    required String? value,
+    required List<Map<String, dynamic>> items,
+    required String Function(Map<String, dynamic>) getLabel,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(labelText: label),
+      items: items.map((e) => DropdownMenuItem(value: e["id"].toString(), child: Text(getLabel(e)))).toList(),
+      onChanged: items.isEmpty ? null : onChanged,
+    );
+  }
+}

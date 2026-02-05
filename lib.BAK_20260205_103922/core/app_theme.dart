@@ -1,0 +1,77 @@
+import 'package:flutter/material.dart';
+
+class AppTheme {
+  static ThemeData dark() {
+    const gold = Color(0xFFE6C15A);
+    const bg = Color(0xFF0B1220);
+
+    final cs = ColorScheme.fromSeed(
+      seedColor: gold,
+      brightness: Brightness.dark,
+    ).copyWith(
+      primary: gold,
+      surface: const Color(0xFF121B2D),
+      background: bg,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: cs,
+      scaffoldBackgroundColor: bg,
+
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+      ),
+
+      // ✅ Flutter novo usa CardThemeData
+      cardTheme: CardThemeData(
+        color: const Color(0xFF121B2D),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: const BorderSide(color: Color(0x1AFFFFFF)),
+        ),
+      ),
+
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF0F1728),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0x1AFFFFFF)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: gold),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: gold,
+          foregroundColor: Colors.black,
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(54),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          side: const BorderSide(color: Color(0x33FFFFFF)),
+          foregroundColor: Colors.white,
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+}
