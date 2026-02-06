@@ -1,3 +1,4 @@
+import "screens/screen_login.dart";
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
         stream: Sb.c.auth.onAuthStateChange,
         builder: (context, snap) {
           final session = Sb.c.auth.currentSession;
-          if (session == null) return const LoginScreen();
+          if (session == null) return ScreenLogin();
           return const HomeScreen();
         },
       ),

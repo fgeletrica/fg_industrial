@@ -1,75 +1,172 @@
+import "../core/sb.dart";
 import 'package:flutter/material.dart';
-import '../supabase_service.dart';
-import 'screen_signup.dart';
-import 'screen_home.dart';
+import '../core/sb.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class ScreenLogin extends StatefulWidget {
+  const ScreenLogin({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ScreenLogin> createState() => _ScreenLoginState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final email = TextEditingController();
-  final pass = TextEditingController();
-  bool loading = false;
+class _ScreenLoginState extends State<ScreenLogin> {
+  final _user = TextEditingController(); // matrícula ou email
+  final _pass = TextEditingController();
+  bool _loading = false;
+  bool _hide = true;
+
+  String _toAuthEmail(String input) {
+    final v = input.trim();
+    if (v.contains('@')) return v.toLowerCase();
+    final onlyDigits = v.replaceAll(RegExp(r'[^0-9]'), '');
+    // fallback: se o cara digitar "6131450" -> vira 6131450@fg-industrial.local
+    return '${onlyDigits}@fg-industrial.local';
+  }
 
   Future<void> _login() async {
-    setState(() => loading = true);
+    final raw = _user.text.trim();
+    final pass = _pass.text;
+    if (raw.isEmpty || pass.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Preencha matrícula/email e senha.')),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
     try {
-      await Sb.c.auth.signInWithPassword(email: email.text.trim(), password: pass.text);
+      final email = _toAuthEmail(raw);
+      await Sb.c.auth.signInWithPassword(email: email, password: pass);
+
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Logado com sucesso!')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erro ao entrar: $e')));
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   void dispose() {
-    email.dispose();
-    pass.dispose();
+    _user.dispose();
+    _pass.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text("FG Industrial", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 14),
-                    TextField(controller: email, decoration: const InputDecoration(labelText: "Email")),
-                    const SizedBox(height: 10),
-                    TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: "Senha")),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: loading ? null : _login,
-                        child: Text(loading ? "Entrando..." : "Entrar"),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [cs.surface, cs.surfaceContainerHighest],
+          ),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Card(
+                elevation: 10,
+                shadowColor: Colors.black26,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 6),
+                      Text(
+                        'FG Industrial',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SignUpScreen())),
-                      child: const Text("Criar conta"),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Acesso por matrícula (7 dígitos) ou email.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withOpacity(.75),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextField(
+                        controller: _user,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Matrícula ou Email',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: _pass,
+                        obscureText: _hide,
+                        decoration: InputDecoration(
+                          labelText: 'Senha',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            onPressed: () => setState(() => _hide = !_hide),
+                            icon: Icon(
+                              _hide ? Icons.visibility : Icons.visibility_off,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton.icon(
+                          onPressed: _loading ? null : _login,
+                          icon: _loading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.login),
+                          label: Text(_loading ? 'Entrando...' : 'Entrar'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: _loading
+                              ? null
+                              : () => Navigator.pushNamed(context, '/signup'),
+                          child: const Text('Criar conta'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+                    ],
+                  ),
                 ),
               ),
             ),
