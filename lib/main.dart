@@ -2,10 +2,10 @@ import "screens/screen_login.dart";
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'core/app_theme.dart';
 import 'supabase_service.dart';
 import 'screens/screen_login.dart';
 import 'screens/screen_home.dart';
+import 'core/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,11 +22,12 @@ class MyApp extends StatelessWidget {
       title: "FG Industrial",
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark(),
+
       home: StreamBuilder<AuthState>(
         stream: Sb.c.auth.onAuthStateChange,
         builder: (context, snap) {
           final session = Sb.c.auth.currentSession;
-          if (session == null) return ScreenLogin();
+          if (session == null) return LoginScreen();
           return const HomeScreen();
         },
       ),

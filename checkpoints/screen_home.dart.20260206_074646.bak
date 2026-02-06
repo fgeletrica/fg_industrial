@@ -1,0 +1,181 @@
+import 'package:flutter/material.dart';
+import '../supabase_service.dart';
+import 'screen_diagnostic_new.dart';
+import 'screen_history.dart';
+import 'screen_users.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String? role;
+  String? siteCode;
+  String? siteName;
+
+  int todayCount = 0;
+  int weekCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMe();
+    _loadCounts();
+  }
+
+  Future<void> _loadMe() async {
+    try {
+      final me = await Sb.c.from("profiles").select("role, site_id").eq("user_id", Sb.c.auth.currentUser!.id).maybeSingle();
+      role = me?["role"]?.toString();
+
+      final siteId = me?["site_id"]?.toString();
+      if (siteId != null) {
+        final s = await Sb.c.from("sites").select("code, name").eq("id", siteId).maybeSingle();
+        siteCode = s?["code"]?.toString();
+        siteName = s?["name"]?.toString();
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      // sem complicar: pega tudo da semana/hoje com filtro pelo RLS do site
+      final now = DateTime.now();
+      final startToday = DateTime(now.year, now.month, now.day).toIso8601String();
+      final startWeek = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7)).toIso8601String();
+
+      final qToday = await Sb.c.from("diagnostics").select("id").gte("created_at", startToday);
+      final qWeek = await Sb.c.from("diagnostics").select("id").gte("created_at", startWeek);
+
+      todayCount = (qToday as List).length;
+      weekCount = (qWeek as List).length;
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  Future<void> _signOut() async {
+    await Sb.c.auth.signOut();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  bool get canManageUsers => role == "supervisor" || role == "admin";
+
+  Widget _actionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, size: 26),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(subtitle, style: const TextStyle(color: Colors.white70)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final u = Sb.c.auth.currentUser;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Industrial • ${siteCode ?? "SITE"}"),
+        actions: [
+          IconButton(onPressed: _loadCounts, icon: const Icon(Icons.refresh)),
+          if (canManageUsers)
+            IconButton(
+              tooltip: "Usuários (Gestão)",
+              icon: const Icon(Icons.admin_panel_settings),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UsersManagementScreen())),
+            ),
+          IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Bem-vindo, ${u?.email ?? ""}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Text("Cargo: ${role ?? "-"} • Site: ${siteCode ?? "-"}", style: const TextStyle(color: Colors.white70)),
+                  if (siteName != null) Text(siteName!, style: const TextStyle(color: Colors.white70)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _smallStat("Hoje", todayCount)),
+              const SizedBox(width: 10),
+              Expanded(child: _smallStat("Últimos 7 dias", weekCount)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Text("Ações", style: TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 10),
+          _actionCard(
+            title: "Novo Diagnóstico",
+            subtitle: "Registrar problema + ação tomada + causa raiz.",
+            icon: Icons.add_circle_outline,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewDiagnosticScreen())),
+          ),
+          const SizedBox(height: 10),
+          _actionCard(
+            title: "Histórico • PDF/CSV",
+            subtitle: "Filtrar por período/turno/linha/máquinas e exportar.",
+            icon: Icons.picture_as_pdf,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryPdfCsvScreen())),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _smallStat(String label, int value) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 6),
+            Text("$value", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+          ],
+        ),
+      ),
+    );
+  }
+}

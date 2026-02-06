@@ -1,52 +1,67 @@
-import "../core/sb.dart";
 import 'package:flutter/material.dart';
-import '../core/sb.dart';
+import '../supabase_service.dart';
+import '../core/login_helpers.dart';
+import 'screen_signup.dart';
 
-class ScreenLogin extends StatefulWidget {
-  const ScreenLogin({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<ScreenLogin> createState() => _ScreenLoginState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _ScreenLoginState extends State<ScreenLogin> {
-  final _user = TextEditingController(); // matrícula ou email
-  final _pass = TextEditingController();
-  bool _loading = false;
-  bool _hide = true;
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _logoCtl;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _logoScale;
 
-  String _toAuthEmail(String input) {
-    final v = input.trim();
-    if (v.contains('@')) return v.toLowerCase();
-    final onlyDigits = v.replaceAll(RegExp(r'[^0-9]'), '');
-    // fallback: se o cara digitar "6131450" -> vira 6131450@fg-industrial.local
-    return '${onlyDigits}@fg-industrial.local';
+  final matricula = TextEditingController();
+  final pass = TextEditingController();
+  bool _loading = false;
+  bool _showPass = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _logoCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    final curve = CurvedAnimation(parent: _logoCtl, curve: Curves.easeOutCubic);
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(curve);
+    _logoScale = Tween<double>(begin: 0.92, end: 1.0).animate(curve);
+    _logoCtl.forward();
   }
 
-  Future<void> _login() async {
-    final raw = _user.text.trim();
-    final pass = _pass.text;
-    if (raw.isEmpty || pass.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preencha matrícula/email e senha.')),
-      );
-      return;
-    }
+  double _logoSize(BuildContext context) {
+    final shortest = MediaQuery.sizeOf(context).shortestSide;
+    if (shortest < 600) return 72; // phone
+    if (shortest < 900) return 84; // tablet/janela média
+    return 96; // desktop
+  }
 
+  Future<void> _signIn() async {
     setState(() => _loading = true);
     try {
-      final email = _toAuthEmail(raw);
-      await Sb.c.auth.signInWithPassword(email: email, password: pass);
+      final m = matricula.text.trim();
+      final p = pass.text;
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Logado com sucesso!')));
+      if (m.isEmpty || p.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preencha matrícula e senha.')),
+        );
+        return;
+      }
+
+      final emailLogin = (m.contains('@') ? m : matriculaToEmail(m));
+      await Sb.c.auth.signInWithPassword(email: emailLogin, password: p);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Erro ao entrar: $e')));
+      ).showSnackBar(SnackBar(content: Text('Falha no login: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -54,119 +69,175 @@ class _ScreenLoginState extends State<ScreenLogin> {
 
   @override
   void dispose() {
-    _user.dispose();
-    _pass.dispose();
+    _logoCtl.dispose();
+    matricula.dispose();
+    pass.dispose();
     super.dispose();
+  }
+
+  Widget _cocaHeader(BuildContext context, {required String subtitle}) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            FadeTransition(
+              opacity: _logoFade,
+              child: ScaleTransition(
+                scale: _logoScale,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/brand/coca_cola_andina.png',
+                    height: _logoSize(context),
+                    width: _logoSize(context),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Coca-Cola Andina • DQX',
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
+                        .copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: (tt.bodySmall ?? const TextStyle(fontSize: 12))
+                        .copyWith(
+                          color: cs.onSurface.withOpacity(0.72),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 3,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [cs.surface, cs.surfaceContainerHighest],
-          ),
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Card(
-                elevation: 10,
-                shadowColor: Colors.black26,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 6),
-                      Text(
-                        'FG Industrial',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Acesso por matrícula (7 dígitos) ou email.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withOpacity(.75),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+      appBar: AppBar(title: const Text('Entrar')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _cocaHeader(context, subtitle: 'Login • Acesso'),
 
-                      TextField(
-                        controller: _user,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Matrícula ou Email',
-                          prefixIcon: Icon(Icons.badge_outlined),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                    // IGUAL ao Signup: FG Industrial abaixo da linha vermelha
+                    const SizedBox(height: 14),
+                    Text(
+                      'FG Industrial',
+                      textAlign: TextAlign.center,
+                      style: (tt.headlineSmall ?? const TextStyle(fontSize: 22))
+                          .copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Acesse com sua matrícula',
+                      textAlign: TextAlign.center,
+                      style: (tt.bodyMedium ?? const TextStyle(fontSize: 14))
+                          .copyWith(
+                            color: cs.onSurface.withOpacity(0.72),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
 
-                      TextField(
-                        controller: _pass,
-                        obscureText: _hide,
-                        decoration: InputDecoration(
-                          labelText: 'Senha',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(() => _hide = !_hide),
-                            icon: Icon(
-                              _hide ? Icons.visibility : Icons.visibility_off,
-                            ),
+                    TextField(
+                      controller: matricula,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Matrícula',
+                        prefixIcon: Icon(Icons.badge),
+                      ),
+                      onSubmitted: (_) => _signIn(),
+                    ),
+                    const SizedBox(height: 10),
+
+                    TextField(
+                      controller: pass,
+                      obscureText: !_showPass,
+                      decoration: InputDecoration(
+                        labelText: 'Senha',
+                        prefixIcon: const Icon(Icons.lock),
+                        suffixIcon: IconButton(
+                          onPressed: () =>
+                              setState(() => _showPass = !_showPass),
+                          icon: Icon(
+                            _showPass ? Icons.visibility_off : Icons.visibility,
                           ),
                         ),
                       ),
+                      onSubmitted: (_) => _signIn(),
+                    ),
+                    const SizedBox(height: 14),
 
-                      const SizedBox(height: 14),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton.icon(
-                          onPressed: _loading ? null : _login,
-                          icon: _loading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.login),
-                          label: Text(_loading ? 'Entrando...' : 'Entrar'),
-                        ),
+                    SizedBox(
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: _loading ? null : _signIn,
+                        icon: _loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.login),
+                        label: Text(_loading ? 'Entrando...' : 'Entrar'),
                       ),
+                    ),
 
-                      const SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: OutlinedButton(
-                          onPressed: _loading
-                              ? null
-                              : () => Navigator.pushNamed(context, '/signup'),
-                          child: const Text('Criar conta'),
-                        ),
+                    SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: _loading
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const ScreenSignup(),
+                                ),
+                              ),
+                        child: const Text('Criar conta'),
                       ),
-
-                      const SizedBox(height: 6),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

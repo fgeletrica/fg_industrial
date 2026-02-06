@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../supabase_service.dart';
 
 class UsersManagementScreen extends StatefulWidget {
-  const UsersManagementScreen({super.key});
+  UsersManagementScreen({super.key});
 
   @override
   State<UsersManagementScreen> createState() => _UsersManagementScreenState();
@@ -28,7 +28,11 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
   Future<void> _load() async {
     setState(() => loading = true);
     try {
-      final me = await Sb.c.from("profiles").select("role, site_id").eq("user_id", Sb.c.auth.currentUser!.id).maybeSingle();
+      final me = await Sb.c
+          .from("profiles")
+          .select("role, site_id")
+          .eq("user_id", Sb.c.auth.currentUser!.id)
+          .maybeSingle();
       myRole = me?["role"]?.toString();
       mySiteId = me?["site_id"]?.toString();
 
@@ -49,7 +53,9 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
       if (mounted) setState(() {});
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Erro: $e")));
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -60,19 +66,23 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
       await Sb.c.from("profiles").update({"role": role}).eq("user_id", userId);
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Cargo atualizado ✅")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Cargo atualizado ✅")));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao atualizar: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Erro ao atualizar: $e")));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Usuários (Gestão)")),
+      appBar: AppBar(title: Text("Usuários (Gestão)")),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : Padding(
               padding: const EdgeInsets.all(16),
               child: Card(
@@ -85,17 +95,20 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                           Expanded(
                             child: Text(
                               "Meu cargo: ${myRole ?? "-"}",
-                              style: const TextStyle(fontWeight: FontWeight.w900),
+                              style: TextStyle(fontWeight: FontWeight.w900),
                             ),
                           ),
-                          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+                          IconButton(
+                            onPressed: _load,
+                            icon: Icon(Icons.refresh),
+                          ),
                         ],
                       ),
-                      const Divider(),
+                      Divider(),
                       Expanded(
                         child: ListView.separated(
                           itemCount: users.length,
-                          separatorBuilder: (_, __) => const Divider(height: 18),
+                          separatorBuilder: (_, __) => Divider(height: 18),
                           itemBuilder: (_, i) {
                             final u = users[i];
                             final userId = u["user_id"].toString();
@@ -107,23 +120,40 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         name.isEmpty ? "(sem nome)" : name,
-                                        style: const TextStyle(fontWeight: FontWeight.w900),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                        ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text("Matrícula: $mat",
-                                          style: const TextStyle(color: Colors.white70)),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        "Matrícula: $mat",
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.72),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: 12),
                                 DropdownButton<String>(
-                                  value: roles.contains(role) ? role : "operator",
+                                  value: roles.contains(role)
+                                      ? role
+                                      : "operator",
                                   items: roles
-                                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                                      .map(
+                                        (r) => DropdownMenuItem(
+                                          value: r,
+                                          child: Text(r),
+                                        ),
+                                      )
                                       .toList(),
                                   onChanged: (!canManage)
                                       ? null
@@ -138,13 +168,17 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                         ),
                       ),
                       if (!canManage)
-                        const Padding(
+                        Padding(
                           padding: EdgeInsets.only(top: 10),
                           child: Text(
                             "Somente supervisor/admin pode alterar cargos.",
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withOpacity(0.72),
+                            ),
                           ),
-                        )
+                        ),
                     ],
                   ),
                 ),

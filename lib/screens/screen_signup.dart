@@ -9,7 +9,35 @@ class ScreenSignup extends StatefulWidget {
   State<ScreenSignup> createState() => _ScreenSignupState();
 }
 
-class _ScreenSignupState extends State<ScreenSignup> {
+class _ScreenSignupState extends State<ScreenSignup>
+    with SingleTickerProviderStateMixin {
+  @override
+  void initState() {
+    super.initState();
+    _logoCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    final curve = CurvedAnimation(parent: _logoCtl, curve: Curves.easeOutCubic);
+    _logoFade = Tween(begin: 0.0, end: 1.0).animate(curve);
+    _logoScale = Tween(begin: 0.92, end: 1.0).animate(curve);
+    _logoCtl.forward();
+  }
+
+  late final AnimationController _logoCtl;
+  late final Animation<double> _logoFade;
+  late final Animation<double> _logoScale;
+
+  double _logoSize(BuildContext context) {
+    final shortest = MediaQuery.sizeOf(context).shortestSide;
+    // phone
+    if (shortest < 600) return 112;
+    // tablet / janela média
+    if (shortest < 900) return 128;
+    // desktop/web grande
+    return 144;
+  }
+
   final emailReal = TextEditingController(); // opcional (pra contato)
   final pass = TextEditingController();
   final matricula = TextEditingController();
@@ -88,12 +116,69 @@ class _ScreenSignupState extends State<ScreenSignup> {
 
   @override
   void dispose() {
+    _logoCtl.dispose();
     emailReal.dispose();
     pass.dispose();
     matricula.dispose();
     fullName.dispose();
     siteCode.dispose();
     super.dispose();
+  }
+
+  Widget _cocaHeader(BuildContext context, {String title = "FG Industrial"}) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            FadeTransition(
+              opacity: _logoFade,
+              child: ScaleTransition(
+                scale: _logoScale,
+                child: Image.asset(
+                  'assets/brand/coca_cola_andina.png',
+                  height: _logoSize(context),
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Coca-Cola Andina • DQX",
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
+                        .copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    title,
+                    style: (tt.bodySmall ?? const TextStyle(fontSize: 12))
+                        .copyWith(
+                          color: cs.onSurface.withOpacity(0.72),
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          height: 3,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -126,6 +211,8 @@ class _ScreenSignupState extends State<ScreenSignup> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _cocaHeader(context, title: "Cadastro • Criar conta"),
+                      const SizedBox(height: 14),
                       Text(
                         'FG Industrial',
                         style: Theme.of(context).textTheme.headlineSmall

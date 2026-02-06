@@ -115,6 +115,12 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
   Future<Uint8List> _buildPdf() async {
   final doc = pw.Document();
 
+  // Fontes (Unicode completo)
+  final fontReg = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'));
+  final fontBold = pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSans-Bold.ttf'));
+  final base = pw.TextStyle(font: fontReg, fontSize: 10);
+  final bold = pw.TextStyle(font: fontBold, fontSize: 10);
+
   // Logo (asset)
   final logoBytes = (await rootBundle.load('assets/brand/coca_cola_andina.png')).buffer.asUint8List();
   final logo = pw.MemoryImage(logoBytes);
@@ -161,7 +167,7 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        "Coca-Cola Andina • DQX",
+                        "Coca-Cola Andina  -  DQX",
                         style: pw.TextStyle(
                           fontSize: 14,
                           fontWeight: pw.FontWeight.bold,
@@ -229,7 +235,7 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         pw.Text("Linha / Grupo / Máquina", style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF374151))),
-                        pw.Text("$linha • $grupo • $maquina", style: pw.TextStyle(fontSize: 10, color: textGray)),
+                        pw.Text("$linha  -  $grupo  -  $maquina", style: pw.TextStyle(fontSize: 10, color: textGray)),
                       ],
                     ),
                   ),
@@ -250,7 +256,7 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
             pw.Row(
               children: [
                 pw.Text(
-                  "FG Industrial • Relatório interno • DQX",
+                  "FG Industrial  -  Relatório interno  -  DQX",
                   style: pw.TextStyle(fontSize: 8, color: PdfColor.fromInt(0xFF6B7280)),
                 ),
                 pw.Spacer(),
@@ -297,10 +303,10 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
             headers: const ["Data", "Linha", "Grupo", "Máquina", "Turno", "Problema", "Ação", "Causa raiz"],
             data: data,
 
-            headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+            headerStyle: pw.TextStyle(font: fontBold, fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: pw.BoxDecoration(color: ccRed),
 
-            cellStyle: pw.TextStyle(fontSize: 8, color: textGray),
+            cellStyle: pw.TextStyle(font: fontReg, fontSize: 8, color: textGray),
             cellAlignment: pw.Alignment.centerLeft,
 
             rowDecoration: const pw.BoxDecoration(),
@@ -374,7 +380,7 @@ String _buildCsv() {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Histórico • PDF/CSV")),
+      appBar: AppBar(title: const Text("Histórico  -  PDF/CSV")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

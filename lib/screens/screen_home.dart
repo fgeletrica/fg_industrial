@@ -19,21 +19,35 @@ class _HomeScreenState extends State<HomeScreen> {
   int todayCount = 0;
   int weekCount = 0;
 
-  @override
+  
+
+  String? topLinha;
+  int topLinhaQtd = 0;
+  String? topMaquina;
+  int topMaquinaQtd = 0;
+@override
   void initState() {
     super.initState();
     _loadMe();
-    _loadCounts();
+    _loadStats();
   }
 
   Future<void> _loadMe() async {
     try {
-      final me = await Sb.c.from("profiles").select("role, site_id").eq("user_id", Sb.c.auth.currentUser!.id).maybeSingle();
+      final me = await Sb.c
+          .from("profiles")
+          .select("role, site_id")
+          .eq("user_id", Sb.c.auth.currentUser!.id)
+          .maybeSingle();
       role = me?["role"]?.toString();
 
       final siteId = me?["site_id"]?.toString();
       if (siteId != null) {
-        final s = await Sb.c.from("sites").select("code, name").eq("id", siteId).maybeSingle();
+        final s = await Sb.c
+            .from("sites")
+            .select("code, name")
+            .eq("id", siteId)
+            .maybeSingle();
         siteCode = s?["code"]?.toString();
         siteName = s?["name"]?.toString();
       }
@@ -41,18 +55,30 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadCounts() async {
+  
+  Future<void> _loadStats() async {
     try {
-      // sem complicar: pega tudo da semana/hoje com filtro pelo RLS do site
-      final now = DateTime.now();
-      final startToday = DateTime(now.year, now.month, now.day).toIso8601String();
-      final startWeek = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 7)).toIso8601String();
+      final me = await Sb.c
+          .from("profiles")
+          .select("site_id")
+          .eq("user_id", Sb.c.auth.currentUser!.id)
+          .maybeSingle();
 
-      final qToday = await Sb.c.from("diagnostics").select("id").gte("created_at", startToday);
-      final qWeek = await Sb.c.from("diagnostics").select("id").gte("created_at", startWeek);
+      final siteId = me?["site_id"]?.toString();
+      if (siteId == null || siteId.isEmpty) return;
 
-      todayCount = (qToday as List).length;
-      weekCount = (qWeek as List).length;
+      final res = await Sb.c.rpc("home_stats", params: {"p_site_id": siteId});
+      if (res == null) return;
+
+      todayCount = (res["today"] ?? 0) as int;
+      weekCount = (res["last7"] ?? 0) as int;
+
+      topLinha = res["top_linha"]?.toString();
+      topLinhaQtd = (res["top_linha_qtd"] ?? 0) as int;
+
+      topMaquina = res["top_maquina"]?.toString();
+      topMaquinaQtd = (res["top_maquina_qtd"] ?? 0) as int;
+
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -85,9 +111,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: Colors.white70)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.72),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -107,12 +143,14 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: Text("Industrial • ${siteCode ?? "SITE"}"),
         actions: [
-          IconButton(onPressed: _loadCounts, icon: const Icon(Icons.refresh)),
+          IconButton(onPressed: _loadStats, icon: const Icon(Icons.refresh)),
           if (canManageUsers)
             IconButton(
               tooltip: "Usuários (Gestão)",
               icon: const Icon(Icons.admin_panel_settings),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UsersManagementScreen())),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => UsersManagementScreen()),
+              ),
             ),
           IconButton(onPressed: _signOut, icon: const Icon(Icons.logout)),
         ],
@@ -126,10 +164,28 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Bem-vindo, ${u?.email ?? ""}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Text(
+                    "Bem-vindo, ${u?.email ?? ""}",
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 6),
-                  Text("Cargo: ${role ?? "-"} • Site: ${siteCode ?? "-"}", style: const TextStyle(color: Colors.white70)),
-                  if (siteName != null) Text(siteName!, style: const TextStyle(color: Colors.white70)),
+                  Text(
+                    "Cargo: ${role ?? "-"} • Site: ${siteCode ?? "-"}",
+                    style: TextStyle(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.72),
+                    ),
+                  ),
+                  if (siteName != null)
+                    Text(
+                      siteName!,
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.72),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -142,37 +198,71 @@ class _HomeScreenState extends State<HomeScreen> {
               Expanded(child: _smallStat("Últimos 7 dias", weekCount)),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _smallStat(
+                  "Linha mais afetada",
+                  topLinha == null ? 0 : topLinhaQtd,
+                  subtitle: topLinha ?? "-",
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _smallStat(
+                  "Máquina mais recorrente",
+                  topMaquina == null ? 0 : topMaquinaQtd,
+                  subtitle: topMaquina ?? "-",
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
-          const Text("Ações", style: TextStyle(fontWeight: FontWeight.w900)),
+          Text("Ações", style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           _actionCard(
             title: "Novo Diagnóstico",
             subtitle: "Registrar problema + ação tomada + causa raiz.",
             icon: Icons.add_circle_outline,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NewDiagnosticScreen())),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NewDiagnosticScreen()),
+            ),
           ),
           const SizedBox(height: 10),
           _actionCard(
             title: "Histórico • PDF/CSV",
             subtitle: "Filtrar por período/turno/linha/máquinas e exportar.",
             icon: Icons.picture_as_pdf,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryPdfCsvScreen())),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const HistoryPdfCsvScreen()),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _smallStat(String label, int value) {
+  Widget _smallStat(String label, int value, {String? subtitle}) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: Colors.white70)),
+            Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withOpacity(0.72),
+              ),
+            ),
             const SizedBox(height: 6),
-            Text("$value", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22)),
+            Text(
+              "$value",
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22),
+            ),
           ],
         ),
       ),

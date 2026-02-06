@@ -1,0 +1,234 @@
+import 'package:flutter/material.dart';
+
+class AppTheme {
+  // Paleta (Coca-Cola + industrial)
+  static const cocaRed = Color(0xFFE41E2B);
+  static const industrialYellow = Color(0xFFF2C14E);
+
+  // DARK (chão de fábrica)
+  static const darkBg = Color(0xFF070B14);
+  static const darkSurface = Color(0xFF0B1220);
+  static const darkOutline = Color(0xFF1B2A41);
+
+  // LIGHT (corporativo)
+  static const lightBg = Color(0xFFF7F8FA);
+  static const lightSurface = Colors.white;
+  static const lightOutline = Color(0xFFE5E7EB);
+
+  static ThemeData dark() {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: cocaRed,
+      brightness: Brightness.dark,
+      background: darkBg,
+      surface: darkSurface,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme.copyWith(
+        primary: cocaRed,
+        secondary: industrialYellow,
+        outline: darkOutline,
+      ),
+      scaffoldBackgroundColor: darkBg,
+
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: darkBg,
+        foregroundColor: Colors.white,
+      ),
+
+      // linha vermelha “assinatura” (sem exagero)
+      dividerTheme: const DividerThemeData(
+        thickness: 1,
+        space: 1,
+        color: darkOutline,
+      ),
+
+      cardTheme: const CardThemeData(
+        color: darkSurface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+          side: BorderSide(color: darkOutline, width: 1),
+        ),
+      ),
+
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: darkSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: darkOutline, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: darkOutline, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: cocaRed, width: 1.6),
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+
+      // Botão primário: vermelho Coca-Cola
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          backgroundColor: const MaterialStatePropertyAll(cocaRed),
+          foregroundColor: const MaterialStatePropertyAll(Colors.white),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+
+      filledButtonTheme: FilledButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          backgroundColor: const MaterialStatePropertyAll(cocaRed),
+          foregroundColor: const MaterialStatePropertyAll(Colors.white),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+
+      // Botão secundário (ex: “Criar conta”): contorno clean
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          side: const MaterialStatePropertyAll(BorderSide(color: darkOutline, width: 1)),
+          foregroundColor: const MaterialStatePropertyAll(Colors.white),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+      ),
+    );
+  }
+
+  static ThemeData light() {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: cocaRed,
+      brightness: Brightness.light,
+      background: lightBg,
+      surface: lightSurface,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme.copyWith(
+        primary: cocaRed,
+        secondary: industrialYellow,
+        outline: lightOutline,
+      ),
+      scaffoldBackgroundColor: lightBg,
+
+      appBarTheme: const AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
+        backgroundColor: lightBg,
+        foregroundColor: Color(0xFF111827),
+      ),
+
+      dividerTheme: const DividerThemeData(
+        thickness: 1,
+        space: 1,
+        color: lightOutline,
+      ),
+
+      cardTheme: const CardThemeData(
+        color: lightSurface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(18)),
+          side: BorderSide(color: lightOutline, width: 1),
+        ),
+      ),
+
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: lightSurface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: lightOutline, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: lightOutline, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+          borderSide: BorderSide(color: cocaRed, width: 1.6),
+        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      ),
+
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          backgroundColor: const MaterialStatePropertyAll(cocaRed),
+          foregroundColor: const MaterialStatePropertyAll(Colors.white),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+
+      filledButtonTheme: FilledButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          backgroundColor: const MaterialStatePropertyAll(cocaRed),
+          foregroundColor: const MaterialStatePropertyAll(Colors.white),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const MaterialStatePropertyAll(Size.fromHeight(52)),
+          shape: const MaterialStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
+          ),
+          side: const MaterialStatePropertyAll(BorderSide(color: lightOutline, width: 1)),
+          foregroundColor: const MaterialStatePropertyAll(Color(0xFF111827)),
+          textStyle: const MaterialStatePropertyAll(
+            TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+      ),
+    );
+  }
+}

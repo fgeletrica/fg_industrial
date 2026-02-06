@@ -38,6 +38,7 @@ dependencies:
   csv: ^6.0.0
   open_filex: ^4.7.0
   path_provider: ^2.1.5
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +62,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - assets/fonts/NotoSans-Bold.ttf
+    - assets/fonts/NotoSans-Regular.ttf
     - assets/brand/coca_cola_andina.png
 
   # To add assets to your application, add an assets section, like this:
@@ -93,3 +96,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#E41C2B"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
