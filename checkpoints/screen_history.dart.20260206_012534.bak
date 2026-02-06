@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -7,8 +6,6 @@ import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 
 import '../supabase_service.dart';
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:pdf/pdf.dart';
 
 class HistoryPdfCsvScreen extends StatefulWidget {
   const HistoryPdfCsvScreen({super.key});
@@ -113,242 +110,42 @@ class _HistoryPdfCsvScreenState extends State<HistoryPdfCsvScreen> {
   }
 
   Future<Uint8List> _buildPdf() async {
-  final doc = pw.Document();
+    final doc = pw.Document();
+    final df = DateFormat("dd/MM/yyyy HH:mm");
 
-  // Logo (asset)
-  final logoBytes = (await rootBundle.load('assets/brand/coca_cola_andina.png')).buffer.asUint8List();
-  final logo = pw.MemoryImage(logoBytes);
-
-  final df = DateFormat("dd/MM/yyyy HH:mm");
-  final dShort = DateFormat("dd/MM/yyyy");
-
-  // Paleta “Coca-Cola”
-  final ccRed = PdfColor.fromInt(0xFFE41E2B);   // vermelho forte
-  final softGray = PdfColor.fromInt(0xFFF3F4F6); // cinza bem claro
-  final textGray = PdfColor.fromInt(0xFF111827); // quase preto
-
-  String turnoLabel() => shift == "ALL" ? "Todos" : shift;
-
-  String getNameById(List<Map<String, dynamic>> list, String? id) {
-    if (id == null) return "Todos";
-    final found = list.firstWhere((e) => e["id"].toString() == id, orElse: () => {});
-    return (found["name"] ?? "Todos").toString();
-  }
-
-  final linha = getNameById(lines, lineId);
-  final grupo = getNameById(groups, groupId);
-  final maquina = getNameById(machines, machineId);
-
-  doc.addPage(
-    pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 28),
-
-      header: (ctx) {
-        return pw.Column(
-          children: [
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.center,
-              children: [
-                pw.Container(
-                  width: 90,
-                  height: 40,
-                  child: pw.Image(logo, fit: pw.BoxFit.contain),
-                ),
-                pw.SizedBox(width: 12),
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        "Coca-Cola Andina • DQX",
-                        style: pw.TextStyle(
-                          fontSize: 14,
-                          fontWeight: pw.FontWeight.bold,
-                          color: textGray,
-                        ),
-                      ),
-                      pw.Text(
-                        "Relatório de Diagnósticos (Histórico)",
-                        style: pw.TextStyle(
-                          fontSize: 11,
-                          color: PdfColor.fromInt(0xFF374151),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      "Gerado em: ${df.format(DateTime.now())}",
-                      style: pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6B7280)),
-                    ),
-                    pw.Text(
-                      "Página ${ctx.pageNumber} / ${ctx.pagesCount}",
-                      style: pw.TextStyle(fontSize: 9, color: PdfColor.fromInt(0xFF6B7280)),
-                    ),
-                  ],
-                )
-              ],
-            ),
-            pw.SizedBox(height: 10),
-            pw.Container(height: 2, color: ccRed),
-            pw.SizedBox(height: 12),
-
-            pw.Container(
-              decoration: pw.BoxDecoration(
-                color: softGray,
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              padding: const pw.EdgeInsets.all(10),
-              child: pw.Row(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text("Período", style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF374151))),
-                        pw.Text("${dShort.format(from)} até ${dShort.format(to)}", style: pw.TextStyle(fontSize: 10, color: textGray)),
-                      ],
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text("Turno", style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF374151))),
-                        pw.Text(turnoLabel(), style: pw.TextStyle(fontSize: 10, color: textGray)),
-                      ],
-                    ),
-                  ),
-                  pw.Expanded(
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text("Linha / Grupo / Máquina", style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColor.fromInt(0xFF374151))),
-                        pw.Text("$linha • $grupo • $maquina", style: pw.TextStyle(fontSize: 10, color: textGray)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 10),
-          ],
-        );
-      },
-
-      footer: (ctx) {
-        return pw.Column(
-          children: [
-            pw.SizedBox(height: 8),
-            pw.Container(height: 1, color: PdfColor.fromInt(0xFFE5E7EB)),
-            pw.SizedBox(height: 6),
-            pw.Row(
-              children: [
-                pw.Text(
-                  "FG Industrial • Relatório interno • DQX",
-                  style: pw.TextStyle(fontSize: 8, color: PdfColor.fromInt(0xFF6B7280)),
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  "Página ${ctx.pageNumber}/${ctx.pagesCount}",
-                  style: pw.TextStyle(fontSize: 8, color: PdfColor.fromInt(0xFF6B7280)),
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-
-      build: (ctx) {
-        if (rows.isEmpty) {
-          return [
-            pw.SizedBox(height: 24),
-            pw.Text("Sem registros no período/filtro selecionado.", style: pw.TextStyle(fontSize: 12, color: textGray)),
-          ];
-        }
-
-        final data = rows.map((r) {
-          final created = DateTime.tryParse(r["created_at"].toString());
-          return [
-            created == null ? "" : df.format(created),
-            (r["line_name"] ?? "").toString(),
-            (r["group_name"] ?? "").toString(),
-            (r["machine_name"] ?? "").toString(),
-            (r["shift"] ?? "").toString(),
-            (r["problem"] ?? "").toString(),
-            (r["action_taken"] ?? "").toString(),
-            (r["root_cause"] == true) ? "SIM" : "NÃO",
-          ];
-        }).toList();
-
-        return [
-          pw.Text(
-            "Resultados: ${rows.length}",
-            style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: textGray),
-          ),
-          pw.SizedBox(height: 10),
-
+    doc.addPage(
+      pw.MultiPage(
+        build: (ctx) => [
+          pw.Text("FG Industrial — Histórico", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.Text("Período: ${DateFormat('dd/MM/yyyy').format(from)} até ${DateFormat('dd/MM/yyyy').format(to)}"),
+          pw.SizedBox(height: 12),
           pw.Table.fromTextArray(
             headers: const ["Data", "Linha", "Grupo", "Máquina", "Turno", "Problema", "Ação", "Causa raiz"],
-            data: data,
-
-            headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-            headerDecoration: pw.BoxDecoration(color: ccRed),
-
-            cellStyle: pw.TextStyle(fontSize: 8, color: textGray),
-            cellAlignment: pw.Alignment.centerLeft,
-
-            rowDecoration: const pw.BoxDecoration(),
-            oddRowDecoration: pw.BoxDecoration(color: PdfColor.fromInt(0xFFF9FAFB)),
-
-            border: pw.TableBorder.all(color: PdfColor.fromInt(0xFFE5E7EB), width: 0.6),
-            cellPadding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 6),
-
-            columnWidths: {
-              0: const pw.FlexColumnWidth(1.2),
-              1: const pw.FlexColumnWidth(1.0),
-              2: const pw.FlexColumnWidth(1.0),
-              3: const pw.FlexColumnWidth(1.1),
-              4: const pw.FlexColumnWidth(0.7),
-              5: const pw.FlexColumnWidth(2.2),
-              6: const pw.FlexColumnWidth(2.2),
-              7: const pw.FlexColumnWidth(0.7),
-            },
+            data: rows.map((r) {
+              final created = DateTime.tryParse(r["created_at"].toString());
+              return [
+                created == null ? "" : df.format(created),
+                (r["line_name"] ?? "").toString(),
+                (r["group_name"] ?? "").toString(),
+                (r["machine_name"] ?? "").toString(),
+                (r["shift"] ?? "").toString(),
+                (r["problem"] ?? "").toString(),
+                (r["action_taken"] ?? "").toString(),
+                (r["root_cause"] == true) ? "SIM" : "NÃO",
+              ];
+            }).toList(),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
           ),
-        ];
-      },
-    ),
-  );
+        ],
+      ),
+    );
 
-  return doc.save();
-}
-
-
-  Future<void> _saveAndOpenPdf() async {
-    final bytes = await _buildPdf();
-
-    final home = Platform.environment["HOME"] ?? ".";
-    final downloads = Directory("$home/Downloads");
-    if (!downloads.existsSync()) {
-      downloads.createSync(recursive: true);
-    }
-
-    final ts = DateFormat("yyyyMMdd_HHmm").format(DateTime.now());
-    final filePath = "${downloads.path}/FG_Industrial_Historico_${ts}.pdf";
-
-    final f = File(filePath);
-    await f.writeAsBytes(bytes, flush: true);
-
-    try {
-      await Process.run("xdg-open", [filePath]);
-    } catch (_) {}
+    return doc.save();
   }
-String _buildCsv() {
+
+  String _buildCsv() {
     final df = DateFormat("yyyy-MM-dd HH:mm");
     final data = <List<String>>[
       ["id", "created_at", "site", "line", "group", "machine", "shift", "problem", "action_taken", "root_cause"],
@@ -456,7 +253,12 @@ String _buildCsv() {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: rows.isEmpty ? null : () async { await _saveAndOpenPdf(); },
+                  onPressed: rows.isEmpty
+                      ? null
+                      : () async {
+                          final bytes = await _buildPdf();
+                          await Printing.layoutPdf(onLayout: (_) async => bytes);
+                        },
                   icon: const Icon(Icons.picture_as_pdf),
                   label: const Text("Gerar PDF"),
                 ),
